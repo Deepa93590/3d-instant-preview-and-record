@@ -1,0 +1,2474 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VoxelPath 3D — Instant 3D File Preview & Camera Path Video Studio</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+  <!-- Three.js r128 Core & Loaders / Controls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/fflate.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/PLYLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FBXLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/ColladaLoader.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            studio: {
+              950: '#090b10',
+              900: '#0f1219',
+              850: '#151923',
+              800: '#1c2230',
+              700: '#283044',
+              600: '#38435e',
+              accent: '#3b82f6',
+              cyan: '#06b6d4',
+              emerald: '#10b981',
+              amber: '#f59e0b',
+              rose: '#f43f5e'
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #090b10;
+      color: #f1f5f9;
+      font-family: 'Inter', sans-serif;
+    }
+    /* Custom scrollbars for side panels */
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f1219;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #283044;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3b82f6;
+    }
+
+    /* Range input styling */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-runnable-track {
+      height: 6px;
+      border-radius: 999px;
+      background: #1c2230;
+      border: 1px solid #283044;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #38bdf8;
+      margin-top: -5px;
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.7);
+      transition: transform 0.15s ease, background-color 0.15s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+      background: #60a5fa;
+    }
+
+    /* Glassmorphism panels */
+    .glass-panel {
+      background: rgba(15, 18, 25, 0.86);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    /* Recording pulse animation */
+    @keyframes recPulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(0.88); }
+    }
+    .rec-dot {
+      animation: recPulse 1.1s infinite ease-in-out;
+    }
+
+    /* Pen mode cursor */
+    .cursor-pen {
+      cursor: crosshair !important;
+    }
+    .cursor-grab-node {
+      cursor: move !important;
+    }
+  </style>
+</head>
+<body class="flex flex-col h-screen w-screen overflow-hidden select-none">
+
+  <!-- Hidden File Input supporting all 3D formats -->
+  <input
+    type="file"
+    id="fileInput"
+    accept=".glb,.gltf,.obj,.stl,.ply,.fbx,.dae"
+    class="hidden"
+  />
+
+  <!-- ==================== TOP STUDIO HEADER BAR ==================== -->
+  <header class="h-13 px-3 py-2 bg-studio-900 border-b border-slate-800/80 flex items-center justify-between gap-2 z-30 shrink-0">
+    <!-- Brand & Active File Badge -->
+    <div class="flex items-center gap-3 min-w-0">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 via-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+          <i class="fa-solid fa-cubes text-white text-sm"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-1.5">
+            <span class="font-bold text-sm tracking-tight text-white">VoxelPath</span>
+            <span class="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 font-semibold">Studio 3D</span>
+          </div>
+          <p class="text-[10px] text-slate-400 hidden sm:block leading-none">Instant 3D File Viewer & Camera Path Video Recorder</p>
+        </div>
+      </div>
+
+      <div class="h-5 w-[1px] bg-slate-800 hidden md:block"></div>
+
+      <!-- Open 3D File Button -->
+      <button
+        id="btnOpenFile"
+        class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white text-xs font-semibold shadow-md shadow-blue-600/25 transition"
+        title="Open .GLB, .GLTF, .OBJ, .STL, .PLY, .FBX, .DAE file"
+      >
+        <i class="fa-solid fa-folder-open"></i>
+        <span>Open 3D File</span>
+      </button>
+
+      <!-- Quick Sample Model Selector -->
+      <div class="relative flex items-center">
+        <i class="fa-solid fa-wand-magic-sparkles text-cyan-400 text-xs absolute left-2.5 pointer-events-none"></i>
+        <select
+          id="presetModelSelect"
+          class="bg-studio-800 hover:bg-studio-700 text-slate-200 text-xs rounded-lg pl-7 pr-6 py-1.5 border border-slate-700/80 focus:outline-none focus:border-cyan-500 transition cursor-pointer"
+          title="Load built-in procedural 3D showcase models"
+        >
+          <option value="mech">Preset: Cybernetic Mech Core</option>
+          <option value="sculpture">Preset: Parametric Torus Knot</option>
+          <option value="pavilion">Preset: Architectural Pavilion</option>
+          <option value="rover">Preset: Sci-Fi Planetary Rover</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Center Interaction Mode Switcher -->
+    <div class="hidden lg:flex items-center bg-studio-950 p-1 rounded-xl border border-slate-800/90 gap-1">
+      <button
+        id="modeOrbitBtn"
+        onclick="setInteractionMode('orbit')"
+        class="mode-btn flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium bg-blue-600 text-white shadow transition"
+      >
+        <i class="fa-solid fa-arrows-rotate"></i>
+        <span>Navigate (Orbit/Pan)</span>
+      </button>
+      <button
+        id="modePenBtn"
+        onclick="setInteractionMode('pen')"
+        class="mode-btn flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-studio-800 transition"
+      >
+        <i class="fa-solid fa-pen-nib text-cyan-400"></i>
+        <span>3D Pen (Draw Camera Path)</span>
+      </button>
+      <button
+        id="modeEditNodesBtn"
+        onclick="setInteractionMode('edit')"
+        class="mode-btn flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-studio-800 transition"
+      >
+        <i class="fa-solid fa-bezier-curve text-amber-400"></i>
+        <span>Move Path Nodes</span>
+      </button>
+    </div>
+
+    <!-- Right Actions: Export Sample, OS "Open With" Setup, Record Shortcut -->
+    <div class="flex items-center gap-2">
+      <button
+        id="btnDownloadTestFile"
+        onclick="downloadTestSTLFile()"
+        class="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-slate-300 text-xs font-medium border border-slate-700/70 transition"
+        title="Export current 3D model as an .OBJ file to test drag-and-drop or Open With"
+      >
+        <i class="fa-solid fa-file-arrow-down text-emerald-400"></i>
+        <span>Export Test .OBJ</span>
+      </button>
+
+      <button
+        id="btnOpenWithModal"
+        onclick="toggleModal('openWithModal', true)"
+        class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-medium transition"
+        title="Configure Windows / macOS 'Open With' context menu integration"
+      >
+        <i class="fa-solid fa-bolt"></i>
+        <span class="hidden sm:inline">"Open With" OS Setup</span>
+      </button>
+
+      <button
+        id="btnHeaderRecord"
+        onclick="startPathVideoRecording()"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white text-xs font-semibold shadow-md shadow-rose-600/25 transition"
+      >
+        <i class="fa-solid fa-circle text-[9px] rec-dot"></i>
+        <span>Record Path Video</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ==================== MAIN WORKSPACE AREA ==================== -->
+  <div class="flex-1 flex relative overflow-hidden">
+
+    <!-- LEFT SIDEBAR: MODEL INSPECTOR, SHADING & DISPLAY CONTROLS -->
+    <aside id="leftSidebar" class="w-72 bg-studio-900/95 border-r border-slate-800/80 flex flex-col z-20 overflow-y-auto shrink-0 hidden md:flex">
+      <!-- Loaded File Inspector Card -->
+      <div class="p-3.5 border-b border-slate-800/80">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+            <i class="fa-solid fa-cube text-cyan-400"></i>
+            3D File Inspector
+          </span>
+          <span id="fileFormatBadge" class="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30">PROCEDURAL</span>
+        </div>
+
+        <div class="bg-studio-950/90 rounded-xl p-2.5 border border-slate-800/80 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-slate-400">Name:</span>
+            <span id="statFileName" class="text-xs font-medium text-white truncate max-w-[145px]" title="Cybernetic_Mech_Core.glb">Cybernetic_Mech_Core</span>
+          </div>
+          <div class="grid grid-cols-2 gap-1.5 pt-1 border-t border-slate-800/60">
+            <div class="bg-studio-900 p-1.5 rounded-lg">
+              <div class="text-[10px] text-slate-400">Vertices</div>
+              <div id="statVertices" class="text-xs font-mono font-semibold text-cyan-400">0</div>
+            </div>
+            <div class="bg-studio-900 p-1.5 rounded-lg">
+              <div class="text-[10px] text-slate-400">Triangles</div>
+              <div id="statTriangles" class="text-xs font-mono font-semibold text-emerald-400">0</div>
+            </div>
+            <div class="bg-studio-900 p-1.5 rounded-lg">
+              <div class="text-[10px] text-slate-400">Meshes</div>
+              <div id="statMeshes" class="text-xs font-mono font-semibold text-slate-200">0</div>
+            </div>
+            <div class="bg-studio-900 p-1.5 rounded-lg">
+              <div class="text-[10px] text-slate-400">Dimensions</div>
+              <div id="statBounds" class="text-[10px] font-mono font-semibold text-amber-300 truncate">4.0×4.0×4.0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Supported Formats Pill List -->
+        <div class="mt-2.5">
+          <div class="text-[10px] text-slate-400 mb-1">Supported Drop / Open Formats:</div>
+          <div class="flex flex-wrap gap-1">
+            <span class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-studio-800 text-slate-300 border border-slate-700/60">.GLB</span>
+            <span class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-studio-800 text-slate-300 border border-slate-700/60">.GLTF</span>
+            <span class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-studio-800 text-slate-300 border border-slate-700/60">.OBJ</span>
+            <span class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-studio-800 text-slate-300 border border-slate-700/60">.STL</span>
+            <span class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-studio-800 text-slate-300 border border-slate-700/60">.PLY</span>
+            <span class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-studio-800 text-slate-300 border border-slate-700/60">.FBX</span>
+            <span class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-studio-800 text-slate-300 border border-slate-700/60">.DAE</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Shading & Render Modes -->
+      <div class="p-3.5 border-b border-slate-800/80 space-y-2.5">
+        <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+          <i class="fa-solid fa-palette text-blue-400"></i>
+          Viewport Shading
+        </span>
+
+        <div class="grid grid-cols-2 gap-1.5">
+          <button onclick="setShadingMode('pbr')" id="shade-pbr" class="shade-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white border border-blue-500 text-left flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-sun text-[11px]"></i> PBR Studio
+          </button>
+          <button onclick="setShadingMode('clay')" id="shade-clay" class="shade-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-studio-800 hover:bg-studio-700 text-slate-300 border border-slate-700/70 text-left flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-circle-half-stroke text-[11px]"></i> Clay Sculpt
+          </button>
+          <button onclick="setShadingMode('wireoverlay')" id="shade-wireoverlay" class="shade-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-studio-800 hover:bg-studio-700 text-slate-300 border border-slate-700/70 text-left flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-border-all text-[11px]"></i> Shaded Wire
+          </button>
+          <button onclick="setShadingMode('wireframe')" id="shade-wireframe" class="shade-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-studio-800 hover:bg-studio-700 text-slate-300 border border-slate-700/70 text-left flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-draw-polygon text-[11px]"></i> Wireframe
+          </button>
+          <button onclick="setShadingMode('normals')" id="shade-normals" class="shade-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-studio-800 hover:bg-studio-700 text-slate-300 border border-slate-700/70 text-left flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-compass text-[11px]"></i> Normals
+          </button>
+          <button onclick="setShadingMode('xray')" id="shade-xray" class="shade-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-studio-800 hover:bg-studio-700 text-slate-300 border border-slate-700/70 text-left flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-ghost text-[11px]"></i> X-Ray Holo
+          </button>
+        </div>
+      </div>
+
+      <!-- Environment & Lighting Controls -->
+      <div class="p-3.5 border-b border-slate-800/80 space-y-3">
+        <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+          <i class="fa-solid fa-lightbulb text-amber-400"></i>
+          Scene & Environment
+        </span>
+
+        <!-- Lighting Intensity -->
+        <div>
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-slate-300">Key Light Intensity</span>
+            <span id="valLightIntensity" class="font-mono text-cyan-400">1.4x</span>
+          </div>
+          <input type="range" id="sliderLightIntensity" min="0.2" max="3.5" step="0.1" value="1.4" class="w-full" />
+        </div>
+
+        <!-- Light Azimuth Angle -->
+        <div>
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-slate-300">Sun Light Angle</span>
+            <span id="valLightAngle" class="font-mono text-cyan-400">45°</span>
+          </div>
+          <input type="range" id="sliderLightAngle" min="0" max="360" step="5" value="45" class="w-full" />
+        </div>
+
+        <!-- Background Theme Selector -->
+        <div>
+          <div class="flex justify-between text-xs mb-1.5">
+            <span class="text-slate-300">Studio Backdrop</span>
+          </div>
+          <div class="grid grid-cols-5 gap-1.5">
+            <button onclick="setBackdrop('obsidian')" class="h-6 rounded-md bg-gradient-to-b from-[#131824] to-[#090b10] border-2 border-cyan-400" title="Obsidian Studio"></button>
+            <button onclick="setBackdrop('midnight')" class="h-6 rounded-md bg-gradient-to-b from-[#0f172a] to-[#1e1b4b] border border-slate-600" title="Midnight Cyber"></button>
+            <button onclick="setBackdrop('slate')" class="h-6 rounded-md bg-gradient-to-b from-[#334155] to-[#0f172a] border border-slate-600" title="Neutral Slate"></button>
+            <button onclick="setBackdrop('emerald')" class="h-6 rounded-md bg-gradient-to-b from-[#064e3b] to-[#022c22] border border-slate-600" title="Chroma Green Screen"></button>
+            <button onclick="setBackdrop('pureblack')" class="h-6 rounded-md bg-black border border-slate-600" title="Pure Void Black"></button>
+          </div>
+        </div>
+
+        <!-- Toggles: Grid, Axes, Turntable, Auto-Animate Model -->
+        <div class="space-y-1.5 pt-1">
+          <label class="flex items-center justify-between text-xs text-slate-300 cursor-pointer">
+            <span>Show Studio Floor Grid</span>
+            <input type="checkbox" id="chkShowGrid" checked class="accent-cyan-500 rounded cursor-pointer" />
+          </label>
+          <label class="flex items-center justify-between text-xs text-slate-300 cursor-pointer">
+            <span>Show XYZ World Axes</span>
+            <input type="checkbox" id="chkShowAxes" checked class="accent-cyan-500 rounded cursor-pointer" />
+          </label>
+          <label class="flex items-center justify-between text-xs text-slate-300 cursor-pointer">
+            <span>Auto-Turntable Model Spin</span>
+            <input type="checkbox" id="chkTurntable" class="accent-cyan-500 rounded cursor-pointer" />
+          </label>
+          <label class="flex items-center justify-between text-xs text-slate-300 cursor-pointer">
+            <span>Hide Path Gizmos in Main View</span>
+            <input type="checkbox" id="chkHideGizmos" class="accent-cyan-500 rounded cursor-pointer" />
+          </label>
+        </div>
+      </div>
+
+      <!-- Navigation Controls Cheat Sheet -->
+      <div class="p-3.5 space-y-2 text-xs text-slate-400">
+        <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+          <i class="fa-solid fa-computer-mouse text-emerald-400"></i>
+          Mouse & Touch Controls
+        </div>
+        <div class="space-y-1 text-[11px]">
+          <div class="flex justify-between"><span>Orbit / Rotate:</span><span class="text-slate-200 font-mono">Left Drag</span></div>
+          <div class="flex justify-between"><span>Pan Camera:</span><span class="text-slate-200 font-mono">Right / Shift+Drag</span></div>
+          <div class="flex justify-between"><span>Zoom In/Out:</span><span class="text-slate-200 font-mono">Scroll / Pinch</span></div>
+          <div class="flex justify-between"><span>Draw Path (Pen):</span><span class="text-cyan-300 font-mono">Click or Drag</span></div>
+          <div class="flex justify-between"><span>Focus Model:</span><span class="text-slate-200 font-mono">Key [F]</span></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ==================== CENTER 3D VIEWPORT ==================== -->
+    <main id="viewportContainer" class="flex-1 relative overflow-hidden bg-gradient-to-b from-[#131824] to-[#090b10]">
+      <!-- Main WebGL Canvas -->
+      <canvas id="mainCanvas" class="w-full h-full block outline-none"></canvas>
+
+      <!-- Drag & Drop Overlay -->
+      <div
+        id="dropZoneOverlay"
+        class="pointer-events-none opacity-0 transition-opacity duration-200 absolute inset-3 rounded-2xl border-2 border-dashed border-cyan-400 bg-studio-950/85 backdrop-blur-md flex flex-col items-center justify-center z-50"
+      >
+        <div class="w-16 h-16 rounded-2xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center mb-3 animate-bounce">
+          <i class="fa-solid fa-cloud-arrow-up text-3xl text-cyan-400"></i>
+        </div>
+        <h3 class="text-lg font-bold text-white">Drop 3D File Anywhere to Preview</h3>
+        <p class="text-xs text-slate-300 mt-1">Supports .GLB, .GLTF, .OBJ, .STL, .PLY, .FBX, .DAE</p>
+      </div>
+
+      <!-- Top-Left Viewport Camera Presets (View Cube Bar) -->
+      <div class="absolute top-3 left-3 flex flex-wrap items-center gap-1.5 glass-panel p-1.5 rounded-xl z-10">
+        <button onclick="setCameraView('iso')" class="px-2 py-1 rounded-lg text-[11px] font-medium text-slate-200 hover:bg-studio-700 hover:text-cyan-300 transition" title="Isometric View">
+          <i class="fa-solid fa-cube mr-1 text-cyan-400"></i>Iso
+        </button>
+        <button onclick="setCameraView('front')" class="px-2 py-1 rounded-lg text-[11px] font-medium text-slate-200 hover:bg-studio-700 transition">Front</button>
+        <button onclick="setCameraView('right')" class="px-2 py-1 rounded-lg text-[11px] font-medium text-slate-200 hover:bg-studio-700 transition">Right</button>
+        <button onclick="setCameraView('top')" class="px-2 py-1 rounded-lg text-[11px] font-medium text-slate-200 hover:bg-studio-700 transition">Top</button>
+        <button onclick="setCameraView('back')" class="px-2 py-1 rounded-lg text-[11px] font-medium text-slate-200 hover:bg-studio-700 transition">Back</button>
+        <div class="h-3.5 w-[1px] bg-slate-700 mx-0.5"></div>
+        <button onclick="fitCameraToModel()" class="px-2 py-1 rounded-lg text-[11px] font-medium text-emerald-300 hover:bg-emerald-500/20 transition" title="Frame / Fit Model to Screen (F)">
+          <i class="fa-solid fa-expand mr-1"></i>Fit
+        </button>
+      </div>
+
+      <!-- Top-Center Active Mode Banner (Pen Tool Helper Banner) -->
+      <div
+        id="penModeBanner"
+        class="hidden absolute top-14 left-1/2 -translate-x-1/2 glass-panel px-4 py-2 rounded-full border border-cyan-500/50 shadow-lg shadow-cyan-950/50 flex items-center gap-3 z-10"
+      >
+        <span class="flex items-center gap-1.5 text-xs font-semibold text-cyan-300">
+          <i class="fa-solid fa-pen-nib animate-pulse"></i>
+          3D Pen Tool Active:
+        </span>
+        <span class="text-xs text-slate-200">Click & drag to sketch a continuous 3D camera path, or click points on the plane!</span>
+        <button onclick="setInteractionMode('orbit')" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600">
+          Done (Esc)
+        </button>
+      </div>
+
+      <!-- Recording Status Banner Overlay -->
+      <div
+        id="recordingBanner"
+        class="hidden absolute top-4 left-1/2 -translate-x-1/2 bg-rose-950/90 border border-rose-500/60 backdrop-blur-md px-4 py-2 rounded-full shadow-2xl flex items-center gap-3 z-30"
+      >
+        <span class="w-2.5 h-2.5 rounded-full bg-rose-500 rec-dot"></span>
+        <span class="text-xs font-bold tracking-wider uppercase text-white">Recording Path Video (60 FPS)</span>
+        <span id="recProgressText" class="text-xs font-mono text-rose-200">0%</span>
+        <button onclick="stopPathVideoRecording()" class="px-2 py-0.5 rounded bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-semibold">
+          Stop & Save
+        </button>
+      </div>
+
+      <!-- Bottom-Right Picture-in-Picture (PiP) Path Camera Live Monitor -->
+      <div
+        id="pipContainer"
+        class="absolute bottom-4 right-4 w-64 sm:w-72 rounded-xl overflow-hidden glass-panel border border-slate-700/80 shadow-2xl z-10 transition-transform"
+      >
+        <div class="px-2.5 py-1.5 bg-studio-950/90 border-b border-slate-800 flex items-center justify-between">
+          <div class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <span class="text-[11px] font-semibold text-slate-200">Path Camera View (PiP)</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <button
+              id="btnSwapMainCamera"
+              onclick="toggleMainViewportCamera()"
+              class="text-[10px] px-1.5 py-0.5 rounded bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border border-blue-500/30 transition"
+              title="Look through Path Camera in the Main Viewport"
+            >
+              <i class="fa-solid fa-video mr-1"></i>Main View
+            </button>
+          </div>
+        </div>
+        <div class="relative aspect-video bg-black">
+          <canvas id="pipCanvas" class="w-full h-full block"></canvas>
+          <!-- Rule of Thirds Crosshair Overlay -->
+          <div class="absolute inset-0 pointer-events-none grid grid-cols-3 grid-rows-3 opacity-20">
+            <div class="border-r border-b border-white"></div>
+            <div class="border-r border-b border-white"></div>
+            <div class="border-b border-white"></div>
+            <div class="border-r border-b border-white"></div>
+            <div class="border-r border-b border-white"></div>
+            <div class="border-b border-white"></div>
+            <div class="border-r border-white"></div>
+            <div class="border-r border-white"></div>
+            <div></div>
+          </div>
+          <!-- HUD Info -->
+          <div class="absolute bottom-1.5 left-2 right-2 flex justify-between items-center pointer-events-none text-[10px] font-mono text-slate-300 bg-black/50 px-1.5 py-0.5 rounded">
+            <span id="pipFovBadge">FOV 45°</span>
+            <span id="pipNodeCountBadge">12 pts</span>
+            <span id="pipTimecode">00:00.0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toast Message Box (No alert() used!) -->
+      <div
+        id="toastBox"
+        class="pointer-events-none opacity-0 transition-all duration-300 translate-y-2 absolute bottom-4 left-4 glass-panel px-3.5 py-2.5 rounded-xl border border-cyan-500/40 shadow-xl flex items-center gap-2.5 z-40 max-w-sm"
+      >
+        <i id="toastIcon" class="fa-solid fa-circle-check text-cyan-400"></i>
+        <span id="toastText" class="text-xs font-medium text-slate-100">Model loaded ready.</span>
+      </div>
+    </main>
+
+    <!-- RIGHT SIDEBAR: 3D PEN TOOL & CAMERA PATH STUDIO -->
+    <aside id="rightSidebar" class="w-80 bg-studio-900/95 border-l border-slate-800/80 flex flex-col z-20 overflow-y-auto shrink-0 hidden lg:flex">
+      <!-- Pen Tool & Path Drawing Header -->
+      <div class="p-3.5 border-b border-slate-800/80 space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] font-semibold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
+            <i class="fa-solid fa-pen-nib"></i>
+            3D Camera Path Pen Studio
+          </span>
+          <span id="pathPointsBadge" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">8 Nodes</span>
+        </div>
+
+        <!-- Main Toggle for Pen Tool -->
+        <div class="grid grid-cols-2 gap-1.5">
+          <button
+            id="btnSidebarPen"
+            onclick="setInteractionMode('pen')"
+            class="px-3 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-lg shadow-cyan-600/20 flex items-center justify-center gap-1.5 transition"
+          >
+            <i class="fa-solid fa-pen-fancy"></i>
+            <span>Draw Path</span>
+          </button>
+          <button
+            id="btnSidebarEdit"
+            onclick="setInteractionMode('edit')"
+            class="px-3 py-2 rounded-xl text-xs font-semibold bg-studio-800 hover:bg-studio-700 text-slate-200 border border-slate-700 flex items-center justify-center gap-1.5 transition"
+          >
+            <i class="fa-solid fa-arrows-up-down-left-right text-amber-400"></i>
+            <span>Edit Nodes</span>
+          </button>
+        </div>
+
+        <!-- Pen Drawing Sub-mode: Freehand Sketch vs Click Points -->
+        <div class="bg-studio-950 p-2.5 rounded-xl border border-slate-800/80 space-y-2.5">
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-slate-400">Pen Stroke Mode:</span>
+            <select id="penStrokeMode" class="bg-studio-800 text-slate-200 text-xs rounded px-2 py-1 border border-slate-700 focus:outline-none">
+              <option value="freehand">Freehand Draw + Click</option>
+              <option value="click">Click Waypoints Only</option>
+            </select>
+          </div>
+
+          <!-- Drawing Plane Elevation Slider -->
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-300">Pen Drawing Plane Height (Y)</span>
+              <span id="valPlaneHeight" class="font-mono text-cyan-400">1.8m</span>
+            </div>
+            <input type="range" id="sliderPlaneHeight" min="-2.0" max="6.0" step="0.1" value="1.8" class="w-full" />
+          </div>
+
+          <!-- Path Actions: Clear, Reverse, Close Loop -->
+          <div class="flex items-center gap-1.5 pt-1">
+            <button onclick="clearPathForNewDrawing()" class="flex-1 py-1.5 px-2 rounded-lg bg-studio-800 hover:bg-rose-950/60 hover:text-rose-300 hover:border-rose-500/40 text-slate-300 text-[11px] font-medium border border-slate-700/70 transition">
+              <i class="fa-solid fa-trash-can mr-1"></i>Clear
+            </button>
+            <button onclick="reverseCameraPath()" class="flex-1 py-1.5 px-2 rounded-lg bg-studio-800 hover:bg-studio-700 text-slate-300 text-[11px] font-medium border border-slate-700/70 transition">
+              <i class="fa-solid fa-right-left mr-1"></i>Reverse
+            </button>
+            <button onclick="undoLastPathNode()" class="py-1.5 px-2.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-slate-300 text-[11px] font-medium border border-slate-700/70 transition" title="Remove last node">
+              <i class="fa-solid fa-rotate-left"></i>
+            </button>
+          </div>
+
+          <label class="flex items-center justify-between text-xs text-slate-300 cursor-pointer pt-1 border-t border-slate-800/80">
+            <span>Closed Loop Track (360° Continuous)</span>
+            <input type="checkbox" id="chkClosedLoop" checked class="accent-cyan-500 rounded cursor-pointer" />
+          </label>
+        </div>
+      </div>
+
+      <!-- Quick Procedural Path Presets -->
+      <div class="p-3.5 border-b border-slate-800/80 space-y-2">
+        <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+          <i class="fa-solid fa-route text-emerald-400"></i>
+          Quick Camera Track Presets
+        </span>
+
+        <div class="grid grid-cols-2 gap-1.5">
+          <button onclick="applyPathPreset('orbit')" class="px-2.5 py-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-slate-200 text-xs font-medium border border-slate-700/70 text-left flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-Sync text-cyan-400 text-[11px]"></i> 360° Orbit
+          </button>
+          <button onclick="applyPathPreset('spiral')" class="px-2.5 py-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-slate-200 text-xs font-medium border border-slate-700/70 text-left flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-tornado text-purple-400 text-[11px]"></i> Helix Spiral
+          </button>
+          <button onclick="applyPathPreset('flyby')" class="px-2.5 py-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-slate-200 text-xs font-medium border border-slate-700/70 text-left flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-paper-plane text-emerald-400 text-[11px]"></i> Fly-By Sweep
+          </button>
+          <button onclick="applyPathPreset('crane')" class="px-2.5 py-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-slate-200 text-xs font-medium border border-slate-700/70 text-left flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-video text-amber-400 text-[11px]"></i> Crane Swoop
+          </button>
+          <button onclick="applyPathPreset('figure8')" class="col-span-2 px-2.5 py-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-slate-200 text-xs font-medium border border-slate-700/70 text-left flex items-center justify-center gap-1.5 transition">
+            <i class="fa-solid fa-infinity text-blue-400 text-[11px]"></i> Infinity Figure-8 Showcase Track
+          </button>
+        </div>
+      </div>
+
+      <!-- Camera Orientation, Target & Lens Settings -->
+      <div class="p-3.5 border-b border-slate-800/80 space-y-3">
+        <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+          <i class="fa-solid fa-crosshairs text-rose-400"></i>
+          Camera Look Target & Lens
+        </span>
+
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">Camera Aim / Look-At Mode:</label>
+          <select id="selectLookMode" class="w-full bg-studio-800 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 border border-slate-700 focus:outline-none">
+            <option value="center">Look at Model Center (Turntable/Focus)</option>
+            <option value="ahead">Look Ahead Along Path (FPV Drone)</option>
+            <option value="custom">Look at Custom Target Height</option>
+          </select>
+        </div>
+
+        <!-- Look Target Vertical Offset -->
+        <div>
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-slate-300">Target Focus Height (Y)</span>
+            <span id="valTargetY" class="font-mono text-cyan-400">0.5m</span>
+          </div>
+          <input type="range" id="sliderTargetY" min="-2.0" max="4.0" step="0.1" value="0.5" class="w-full" />
+        </div>
+
+        <!-- Spline Curve Tension / Smoothness -->
+        <div>
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-slate-300">Spline Curve Tension</span>
+            <span id="valCurveTension" class="font-mono text-cyan-400">0.50</span>
+          </div>
+          <input type="range" id="sliderCurveTension" min="0.0" max="1.0" step="0.05" value="0.50" class="w-full" />
+        </div>
+
+        <!-- Path Scale Multiplier -->
+        <div>
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-slate-300">Track Radius / Scale</span>
+            <span id="valPathScale" class="font-mono text-cyan-400">100%</span>
+          </div>
+          <input type="range" id="sliderPathScale" min="40" max="220" step="5" value="100" class="w-full" />
+        </div>
+
+        <!-- Path Camera Focal Length / FOV -->
+        <div>
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-slate-300">Path Camera Lens FOV</span>
+            <span id="valPathFov" class="font-mono text-cyan-400">45° (35mm)</span>
+          </div>
+          <input type="range" id="sliderPathFov" min="20" max="90" step="1" value="45" class="w-full" />
+        </div>
+      </div>
+
+      <!-- Video Capture Configuration -->
+      <div class="p-3.5 space-y-2.5">
+        <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+          <i class="fa-solid fa-film text-rose-400"></i>
+          Video Capture Studio
+        </span>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Duration (sec)</label>
+            <input type="number" id="inputDuration" min="2" max="60" value="8" class="w-full bg-studio-800 text-white text-xs font-mono rounded-lg px-2.5 py-1.5 border border-slate-700 focus:outline-none" />
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Motion Easing</label>
+            <select id="selectEasing" class="w-full bg-studio-800 text-white text-xs rounded-lg px-2 py-1.5 border border-slate-700 focus:outline-none">
+              <option value="smooth">Smooth Sine</option>
+              <option value="linear">Constant Linear</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="text-[11px] text-slate-400 block mb-1">Capture Resolution</label>
+          <select id="selectResolution" class="w-full bg-studio-800 text-white text-xs rounded-lg px-2.5 py-1.5 border border-slate-700 focus:outline-none">
+            <option value="1080p">1920 × 1080 (Full HD 16:9 @ 60fps)</option>
+            <option value="720p">1280 × 720 (HD 16:9 @ 60fps)</option>
+            <option value="square">1080 × 1080 (Square 1:1 @ 60fps)</option>
+            <option value="native">Viewport Native Size (@ 60fps)</option>
+          </select>
+        </div>
+
+        <button
+          onclick="startPathVideoRecording()"
+          id="btnSidebarRecord"
+          class="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white font-semibold text-xs shadow-lg shadow-rose-600/25 flex items-center justify-center gap-2 transition mt-1"
+        >
+          <i class="fa-solid fa-video"></i>
+          <span>Capture & Download Path Video</span>
+        </button>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ==================== BOTTOM TIMELINE & SCRUBBER BAR ==================== -->
+  <footer class="h-14 bg-studio-900 border-t border-slate-800/90 px-4 flex items-center gap-3 z-30 shrink-0">
+    <!-- Play / Pause / Restart Controls -->
+    <div class="flex items-center gap-1.5">
+      <button
+        id="btnPlayPausePath"
+        onclick="togglePlayPath()"
+        class="w-9 h-9 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-studio-950 flex items-center justify-center shadow-md shadow-cyan-500/20 transition"
+        title="Play / Pause Camera Path Preview (Space)"
+      >
+        <i id="iconPlayPause" class="fa-solid fa-play text-xs ml-0.5"></i>
+      </button>
+      <button
+        onclick="scrubToProgress(0)"
+        class="w-8 h-8 rounded-lg bg-studio-800 hover:bg-studio-700 text-slate-300 flex items-center justify-center border border-slate-700/70 transition"
+        title="Jump to Path Start (0%)"
+      >
+        <i class="fa-solid fa-backward-step text-xs"></i>
+      </button>
+    </div>
+
+    <!-- Current Progress Percentage & Time -->
+    <div class="w-24 text-right font-mono text-xs shrink-0">
+      <span id="timelineTimeText" class="text-cyan-400 font-semibold">0.0s</span>
+      <span class="text-slate-500">/</span>
+      <span id="timelineDurationText" class="text-slate-400">8.0s</span>
+    </div>
+
+    <!-- Scrubbable Timeline Track -->
+    <div class="flex-1 flex items-center relative">
+      <input
+        type="range"
+        id="timelineScrubber"
+        min="0"
+        max="1000"
+        step="1"
+        value="0"
+        class="w-full z-10"
+      />
+    </div>
+
+    <!-- Percentage Readout -->
+    <div id="timelinePercentBadge" class="w-14 text-center font-mono text-xs py-1 px-2 rounded bg-studio-800 text-slate-200 border border-slate-700/70">
+      0%
+    </div>
+
+    <!-- Toggle View Through Path Camera Button -->
+    <button
+      id="btnFooterCamToggle"
+      onclick="toggleMainViewportCamera()"
+      class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-slate-200 text-xs font-medium border border-slate-700 transition"
+    >
+      <i class="fa-solid fa-eye text-cyan-400"></i>
+      <span id="footerCamToggleText">View: Free Editor Cam</span>
+    </button>
+  </footer>
+
+  <!-- ==================== MODAL 1: "OPEN WITH" OS INTEGRATION & PWA SETUP ==================== -->
+  <div id="openWithModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-studio-900 border border-slate-700/80 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
+            <i class="fa-solid fa-bolt text-emerald-400"></i>
+          </div>
+          <div>
+            <h2 class="text-base font-bold text-white">OS "Open With" 3D File Association Setup</h2>
+            <p class="text-xs text-slate-400">Open .GLB, .GLTF, .OBJ, .STL, .PLY, .FBX, and .DAE files directly from Explorer or Finder</p>
+          </div>
+        </div>
+        <button onclick="toggleModal('openWithModal', false)" class="w-8 h-8 rounded-lg bg-studio-800 hover:bg-studio-700 text-slate-400 hover:text-white flex items-center justify-center">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-4 text-xs text-slate-300 leading-relaxed">
+        <!-- Method 1: PWA File Handling API -->
+        <div class="p-4 rounded-xl bg-studio-950 border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-semibold text-cyan-400 flex items-center gap-1.5">
+              <i class="fa-solid fa-globe"></i>
+              Method 1: Web PWA File Handling API (Automatic in Chrome / Edge)
+            </span>
+            <span id="launchQueueStatusBadge" class="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+              launchQueue API Ready
+            </span>
+          </div>
+          <p class="text-slate-400">
+            This application includes a built-in Web App Manifest with <code class="text-cyan-300 font-mono">file_handlers</code> and listens to <code class="text-cyan-300 font-mono">window.launchQueue.setConsumer()</code>. When installed as an App in Chrome/Edge (click the install icon in your browser's address bar), VoxelPath 3D automatically registers itself in your OS <strong>"Open With"</strong> menu for all 7 supported 3D formats.
+          </p>
+        </div>
+
+        <!-- Method 2: Portable Desktop Launcher Generator -->
+        <div class="p-4 rounded-xl bg-studio-950 border border-slate-800 space-y-2.5">
+          <div class="font-semibold text-amber-400 flex items-center gap-1.5">
+            <i class="fa-brands fa-windows"></i>
+            <i class="fa-brands fa-apple"></i>
+            Method 2: Download 1-Click Local "Open With" Helper Script
+          </div>
+          <p class="text-slate-400">
+            Want to associate local 3D files right now? Download a lightweight launcher script or export a test <code class="text-emerald-300 font-mono">.OBJ</code> model to test dragging & dropping into the studio.
+          </p>
+          <div class="flex flex-wrap gap-2 pt-1">
+            <button
+              onclick="downloadManifestFile()"
+              class="px-3 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 font-medium flex items-center gap-1.5 transition"
+            >
+              <i class="fa-solid fa-file-code"></i>
+              <span>Download PWA manifest.json</span>
+            </button>
+            <button
+              onclick="downloadTestSTLFile()"
+              class="px-3 py-2 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 font-medium flex items-center gap-1.5 transition"
+            >
+              <i class="fa-solid fa-cube"></i>
+              <span>Download Sample 3D File (.OBJ)</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end pt-2 border-t border-slate-800">
+        <button onclick="toggleModal('openWithModal', false)" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold">
+          Got It
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL 2: RECORDED VIDEO PREVIEW & DOWNLOAD ==================== -->
+  <div id="videoPreviewModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden items-center justify-center p-4">
+    <div class="bg-studio-900 border border-slate-700/80 rounded-2xl max-w-3xl w-full p-5 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center">
+            <i class="fa-solid fa-film text-rose-400"></i>
+          </div>
+          <div>
+            <h2 class="text-base font-bold text-white">Camera Path Video Recorded!</h2>
+            <p id="recordedVideoMeta" class="text-xs text-slate-400">60 FPS WebM Capture</p>
+          </div>
+        </div>
+        <button onclick="toggleModal('videoPreviewModal', false)" class="w-8 h-8 rounded-lg bg-studio-800 hover:bg-studio-700 text-slate-400 hover:text-white flex items-center justify-center">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="rounded-xl overflow-hidden bg-black border border-slate-800 aspect-video">
+        <video id="recordedVideoElement" controls autoplay loop class="w-full h-full object-contain"></video>
+      </div>
+
+      <div class="flex items-center justify-between pt-2">
+        <span class="text-xs text-slate-400">Your video has also been downloaded automatically.</span>
+        <div class="flex items-center gap-2">
+          <button onclick="toggleModal('videoPreviewModal', false)" class="px-4 py-2 rounded-xl bg-studio-800 hover:bg-studio-700 text-slate-300 text-xs font-medium">
+            Close
+          </button>
+          <a
+            id="btnDownloadVideoLink"
+            href="#"
+            download="voxelpath-camera-capture.webm"
+            class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-lg shadow-rose-600/25"
+          >
+            <i class="fa-solid fa-download"></i>
+            <span>Download Video (.webm)</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== APPLICATION JAVASCRIPT ==================== -->
+  <script>
+    /***************************************************************************
+     * 1. PWA MANIFEST & OS "OPEN WITH" FILE HANDLING API SETUP
+     ***************************************************************************/
+    const pwaManifest = {
+      name: "VoxelPath 3D — File Preview & Path Video Studio",
+      short_name: "VoxelPath 3D",
+      start_url: "./",
+      display: "standalone",
+      background_color: "#090b10",
+      theme_color: "#0f1219",
+      file_handlers: [
+        {
+          action: "./",
+          accept: {
+            "model/gltf-binary": [".glb"],
+            "model/gltf+json": [".gltf"],
+            "model/obj": [".obj"],
+            "model/stl": [".stl"],
+            "application/sla": [".stl"],
+            "application/octet-stream": [".ply", ".fbx", ".dae", ".glb", ".obj", ".stl"]
+          }
+        }
+      ]
+    };
+
+    (function injectManifest() {
+      try {
+        const blob = new Blob([JSON.stringify(pwaManifest, null, 2)], { type: 'application/json' });
+        const link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = URL.createObjectURL(blob);
+        document.head.appendChild(link);
+      } catch (e) {
+        console.warn("Manifest injection warning:", e);
+      }
+    })();
+
+    /***************************************************************************
+     * 2. GLOBAL APPLICATION STATE
+     ***************************************************************************/
+    const state = {
+      interactionMode: 'orbit', // 'orbit' | 'pen' | 'edit'
+      shadingMode: 'pbr',       // 'pbr' | 'clay' | 'wireoverlay' | 'wireframe' | 'normals' | 'xray'
+      mainViewIsPathCam: false,
+      turntableEnabled: false,
+      hideGizmos: false,
+      currentFileName: 'Cybernetic_Mech_Core.glb',
+      currentFileFormat: 'PROCEDURAL',
+      modelCenter: new THREE.Vector3(0, 0.8, 0),
+      modelRadius: 2.5,
+
+      // Camera Path & Pen Tool State
+      rawControlPoints: [],     // Base control points before scale
+      pathControlPoints: [],    // Scaled THREE.Vector3 points
+      curve: null,              // THREE.CatmullRomCurve3
+      closedLoop: true,
+      curveTension: 0.5,
+      pathScale: 1.0,
+      planeHeight: 1.8,
+      lookMode: 'center',       // 'center' | 'ahead' | 'custom'
+      targetY: 0.6,
+      pathFov: 45,
+
+      // Playback & Recording State
+      isPlayingPath: true,
+      pathProgress: 0,          // 0.0 to 1.0
+      pathDuration: 8.0,        // seconds
+      easingMode: 'smooth',     // 'smooth' | 'linear'
+      isRecording: false,
+      mediaRecorder: null,
+      recordedChunks: [],
+
+      // Pen Drawing Interaction
+      isDrawingStroke: false,
+      selectedNodeIndex: -1,
+      isDraggingNode: false
+    };
+
+    /***************************************************************************
+     * 3. THREE.JS SCENE, CAMERAS, RENDERERS & LIGHTS
+     ***************************************************************************/
+    let scene, mainRenderer, pipRenderer;
+    let editorCamera, pathCamera, orbitControls;
+    let modelRootGroup, wireframeOverlayGroup;
+    let gridHelper, axesHelper, drawingPlaneMesh, drawingCursorMesh;
+    let pathVisualGroup, pathTubeMesh, pathControlSpheres = [], pathChevrons = [];
+    let cameraGizmoGroup, lookTargetGizmo;
+    let keyLight, fillLight, rimLight, ambientLight;
+    const raycaster = new THREE.Raycaster();
+    const mouseNDC = new THREE.Vector2();
+    const mathPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -state.planeHeight);
+    const clock = new THREE.Clock();
+
+    function initThreeStudio() {
+      const container = document.getElementById('viewportContainer');
+      const mainCanvas = document.getElementById('mainCanvas');
+      const pipCanvas = document.getElementById('pipCanvas');
+
+      // Scene
+      scene = new THREE.Scene();
+
+      // Main Editor Camera
+      editorCamera = new THREE.PerspectiveCamera(48, container.clientWidth / container.clientHeight, 0.05, 500);
+      editorCamera.position.set(5.5, 4.2, 6.5);
+
+      // Virtual Path Camera (for PiP and Video Recording)
+      pathCamera = new THREE.PerspectiveCamera(state.pathFov, 16 / 9, 0.05, 500);
+      pathCamera.position.set(0, 2, 5);
+
+      // Main WebGL Renderer (preserveDrawingBuffer enabled for crisp video stream capture)
+      mainRenderer = new THREE.WebGLRenderer({
+        canvas: mainCanvas,
+        antialias: true,
+        alpha: true,
+        preserveDrawingBuffer: true
+      });
+      mainRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      mainRenderer.setSize(container.clientWidth, container.clientHeight);
+      mainRenderer.shadowMap.enabled = true;
+      mainRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      mainRenderer.outputEncoding = THREE.sRGBEncoding;
+      mainRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+      mainRenderer.toneMappingExposure = 1.1;
+
+      // Picture-in-Picture (PiP) Renderer
+      pipRenderer = new THREE.WebGLRenderer({
+        canvas: pipCanvas,
+        antialias: true
+      });
+      pipRenderer.setPixelRatio(1);
+      pipRenderer.setSize(288, 162);
+      pipRenderer.outputEncoding = THREE.sRGBEncoding;
+      pipRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+      pipRenderer.setClearColor(0x0b0f17, 1);
+
+      // OrbitControls
+      orbitControls = new THREE.OrbitControls(editorCamera, mainCanvas);
+      orbitControls.enableDamping = true;
+      orbitControls.dampingFactor = 0.06;
+      orbitControls.target.set(0, 0.8, 0);
+      orbitControls.maxDistance = 120;
+      orbitControls.minDistance = 0.2;
+
+      // Studio Lighting Setup
+      ambientLight = new THREE.HemisphereLight(0xdbeafe, 0x1e293b, 0.75);
+      scene.add(ambientLight);
+
+      keyLight = new THREE.DirectionalLight(0xffffff, 1.4);
+      keyLight.position.set(6, 10, 6);
+      keyLight.castShadow = true;
+      keyLight.shadow.mapSize.width = 2048;
+      keyLight.shadow.mapSize.height = 2048;
+      keyLight.shadow.camera.near = 0.5;
+      keyLight.shadow.camera.far = 35;
+      const d = 6;
+      keyLight.shadow.camera.left = -d;
+      keyLight.shadow.camera.right = d;
+      keyLight.shadow.camera.top = d;
+      keyLight.shadow.camera.bottom = -d;
+      scene.add(keyLight);
+
+      fillLight = new THREE.DirectionalLight(0x38bdf8, 0.55);
+      fillLight.position.set(-7, 4, -5);
+      scene.add(fillLight);
+
+      rimLight = new THREE.DirectionalLight(0x818cf8, 0.65);
+      rimLight.position.set(0, -5, -8);
+      scene.add(rimLight);
+
+      // Studio Grid & World Axes
+      gridHelper = new THREE.GridHelper(20, 40, 0x38bdf8, 0x1e293b);
+      gridHelper.position.y = 0;
+      scene.add(gridHelper);
+
+      axesHelper = new THREE.AxesHelper(2.5);
+      axesHelper.position.set(0, 0.01, 0);
+      scene.add(axesHelper);
+
+      // Model Root Container
+      modelRootGroup = new THREE.Group();
+      scene.add(modelRootGroup);
+
+      wireframeOverlayGroup = new THREE.Group();
+      scene.add(wireframeOverlayGroup);
+
+      // Interactive 3D Pen Drawing Plane (translucent holographic grid disc)
+      const planeGeo = new THREE.RingGeometry(0.1, 9, 64);
+      planeGeo.rotateX(-Math.PI / 2);
+      const planeMat = new THREE.MeshBasicMaterial({
+        color: 0x06b6d4,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.07,
+        depthWrite: false
+      });
+      drawingPlaneMesh = new THREE.Mesh(planeGeo, planeMat);
+      drawingPlaneMesh.position.y = state.planeHeight;
+      drawingPlaneMesh.visible = false;
+      scene.add(drawingPlaneMesh);
+
+      // 3D Pen Hover Cursor Ring
+      const cursorGeo = new THREE.RingGeometry(0.12, 0.18, 32);
+      cursorGeo.rotateX(-Math.PI / 2);
+      const cursorMat = new THREE.MeshBasicMaterial({
+        color: 0x22d3ee,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.9
+      });
+      drawingCursorMesh = new THREE.Mesh(cursorGeo, cursorMat);
+      drawingCursorMesh.visible = false;
+      scene.add(drawingCursorMesh);
+
+      // Camera Path Visual Container & Virtual Camera Frustum Gizmo
+      pathVisualGroup = new THREE.Group();
+      scene.add(pathVisualGroup);
+
+      createCameraFrustumGizmo();
+
+      // Load Default Procedural Model & Initial Orbit Camera Path
+      loadProceduralModel('mech');
+      applyPathPreset('orbit', true);
+
+      // Bind Viewport Pointer & Resize Listeners
+      setupViewportInteractions();
+      window.addEventListener('resize', onWindowResize);
+
+      // Check if launched via OS "Open With" PWA LaunchQueue
+      initLaunchQueueHandler();
+
+      // Start Animation Loop
+      animateStudio();
+    }
+
+    /***************************************************************************
+     * 4. VIRTUAL CAMERA FRUSTUM GIZMO & 3D PATH VISUALIZATION
+     ***************************************************************************/
+    function createCameraFrustumGizmo() {
+      cameraGizmoGroup = new THREE.Group();
+
+      // Camera Body Box
+      const bodyGeo = new THREE.BoxGeometry(0.28, 0.2, 0.36);
+      const bodyMat = new THREE.MeshBasicMaterial({ color: 0x06b6d4 });
+      const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+      cameraGizmoGroup.add(bodyMesh);
+
+      // Lens Cone wireframe frustum pointing towards -Z
+      const coneGeo = new THREE.ConeGeometry(0.32, 0.55, 4);
+      coneGeo.rotateX(Math.PI / 2);
+      coneGeo.rotateZ(Math.PI / 4);
+      const coneEdges = new THREE.EdgesGeometry(coneGeo);
+      const coneLine = new THREE.LineSegments(
+        coneEdges,
+        new THREE.LineBasicMaterial({ color: 0x38bdf8 })
+      );
+      coneLine.position.z = -0.45;
+      cameraGizmoGroup.add(coneLine);
+
+      // "Up" indicator triangle on top of camera
+      const upGeo = new THREE.ConeGeometry(0.08, 0.14, 3);
+      const upMesh = new THREE.Mesh(upGeo, new THREE.MeshBasicMaterial({ color: 0xf43f5e }));
+      upMesh.position.set(0, 0.18, -0.1);
+      cameraGizmoGroup.add(upMesh);
+
+      scene.add(cameraGizmoGroup);
+
+      // Look Target Crosshair Sphere
+      const targetGeo = new THREE.OctahedronGeometry(0.14, 0);
+      const targetMat = new THREE.MeshBasicMaterial({ color: 0xf43f5e, wireframe: true });
+      lookTargetGizmo = new THREE.Mesh(targetGeo, targetMat);
+      scene.add(lookTargetGizmo);
+    }
+
+    function rebuildCameraPathSpline() {
+      // Clear previous path visuals
+      while (pathVisualGroup.children.length > 0) {
+        const child = pathVisualGroup.children[0];
+        if (child.geometry) child.geometry.dispose();
+        pathVisualGroup.remove(child);
+      }
+      pathControlSpheres = [];
+      pathChevrons = [];
+
+      // Apply path scale around model center XZ
+      state.pathControlPoints = state.rawControlPoints.map(pt => {
+        return new THREE.Vector3(
+          pt.x * state.pathScale,
+          pt.y,
+          pt.z * state.pathScale
+        );
+      });
+
+      const count = state.pathControlPoints.length;
+      document.getElementById('pathPointsBadge').textContent = `${count} Nodes`;
+      document.getElementById('pipNodeCountBadge').textContent = `${count} pts`;
+
+      if (count < 2) {
+        state.curve = null;
+        return;
+      }
+
+      // Build smooth CatmullRomCurve3
+      state.curve = new THREE.CatmullRomCurve3(
+        state.pathControlPoints,
+        state.closedLoop,
+        'catmullrom',
+        state.curveTension
+      );
+
+      // 1. Glowing Spline Tube
+      const segments = Math.max(80, count * 20);
+      const tubeGeo = new THREE.TubeGeometry(state.curve, segments, 0.032, 8, state.closedLoop);
+      const tubeMat = new THREE.MeshBasicMaterial({
+        color: 0x06b6d4,
+        transparent: true,
+        opacity: 0.85
+      });
+      pathTubeMesh = new THREE.Mesh(tubeGeo, tubeMat);
+      pathVisualGroup.add(pathTubeMesh);
+
+      // 2. Interactive Control Point Nodes
+      const nodeGeo = new THREE.SphereGeometry(0.11, 16, 16);
+      state.pathControlPoints.forEach((pt, idx) => {
+        let color = 0x38bdf8;
+        if (idx === 0) color = 0x10b981; // Start Node = Emerald
+        else if (idx === count - 1 && !state.closedLoop) color = 0xf43f5e; // End Node = Rose
+
+        const nodeMat = new THREE.MeshBasicMaterial({ color });
+        const sphere = new THREE.Mesh(nodeGeo, nodeMat);
+        sphere.position.copy(pt);
+        sphere.userData = { nodeIndex: idx };
+        pathVisualGroup.add(sphere);
+        pathControlSpheres.push(sphere);
+
+        // Drop vertical height line to floor for spatial depth perception
+        const dropPoints = [pt, new THREE.Vector3(pt.x, 0, pt.z)];
+        const dropGeo = new THREE.BufferGeometry().setFromPoints(dropPoints);
+        const dropLine = new THREE.Line(
+          dropGeo,
+          new THREE.LineBasicMaterial({ color: 0x334155, transparent: true, opacity: 0.45 })
+        );
+        pathVisualGroup.add(dropLine);
+      });
+
+      // 3. Direction Cone Chevrons along the curve
+      const chevronCount = 12;
+      const coneGeo = new THREE.ConeGeometry(0.065, 0.18, 8);
+      coneGeo.rotateX(Math.PI / 2);
+      const coneMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
+
+      for (let i = 0; i < chevronCount; i++) {
+        const u = i / chevronCount;
+        const pos = state.curve.getPointAt(u);
+        const tangent = state.curve.getTangentAt(u).normalize();
+        const chevron = new THREE.Mesh(coneGeo, coneMat);
+        chevron.position.copy(pos);
+        chevron.lookAt(pos.clone().add(tangent));
+        pathVisualGroup.add(chevron);
+        pathChevrons.push(chevron);
+      }
+
+      updatePathCameraTransform(state.pathProgress);
+    }
+
+    function updatePathCameraTransform(rawProgress) {
+      if (!state.curve || state.pathControlPoints.length < 2) return;
+
+      const u = Math.max(0, Math.min(1, rawProgress));
+      // Apply easing if enabled
+      const t = state.easingMode === 'smooth'
+        ? 0.5 - 0.5 * Math.cos(u * Math.PI)
+        : u;
+
+      const camPos = state.curve.getPointAt(t);
+      pathCamera.position.copy(camPos);
+
+      let targetPos = new THREE.Vector3(0, state.targetY, 0);
+
+      if (state.lookMode === 'center') {
+        targetPos.set(state.modelCenter.x, state.targetY, state.modelCenter.z);
+      } else if (state.lookMode === 'ahead') {
+        const lookAheadT = state.closedLoop
+          ? (t + 0.04) % 1.0
+          : Math.min(1.0, t + 0.04);
+        targetPos = state.curve.getPointAt(lookAheadT);
+        if (t >= 0.99 && !state.closedLoop) {
+          const tangent = state.curve.getTangentAt(t);
+          targetPos = camPos.clone().add(tangent);
+        }
+      } else if (state.lookMode === 'custom') {
+        targetPos.set(0, state.targetY, 0);
+      }
+
+      pathCamera.lookAt(targetPos);
+      pathCamera.updateProjectionMatrix();
+
+      // Sync 3D Camera Frustum Gizmo
+      cameraGizmoGroup.position.copy(pathCamera.position);
+      cameraGizmoGroup.quaternion.copy(pathCamera.quaternion);
+      lookTargetGizmo.position.copy(targetPos);
+    }
+
+    /***************************************************************************
+     * 5. QUICK CAMERA PATH PRESETS
+     ***************************************************************************/
+    function applyPathPreset(presetName, silent = false) {
+      const r = Math.max(3.6, state.modelRadius * 1.9);
+      const yBase = state.planeHeight;
+      const pts = [];
+
+      if (presetName === 'orbit') {
+        state.closedLoop = true;
+        const steps = 8;
+        for (let i = 0; i < steps; i++) {
+          const angle = (i / steps) * Math.PI * 2;
+          pts.push(new THREE.Vector3(Math.cos(angle) * r, yBase, Math.sin(angle) * r));
+        }
+      } else if (presetName === 'spiral') {
+        state.closedLoop = false;
+        const steps = 14;
+        for (let i = 0; i <= steps; i++) {
+          const u = i / steps;
+          const angle = u * Math.PI * 3.5;
+          const rad = r * (1.15 - u * 0.35);
+          const y = 0.4 + u * 3.6;
+          pts.push(new THREE.Vector3(Math.cos(angle) * rad, y, Math.sin(angle) * rad));
+        }
+      } else if (presetName === 'flyby') {
+        state.closedLoop = false;
+        pts.push(
+          new THREE.Vector3(-r * 1.6, yBase + 1.2, r * 1.3),
+          new THREE.Vector3(-r * 0.7, yBase + 0.4, r * 0.95),
+          new THREE.Vector3(0, yBase - 0.1, r * 0.75),
+          new THREE.Vector3(r * 0.8, yBase + 0.3, r * 0.95),
+          new THREE.Vector3(r * 1.6, yBase + 1.4, r * 0.3)
+        );
+      } else if (presetName === 'crane') {
+        state.closedLoop = false;
+        pts.push(
+          new THREE.Vector3(0, 0.25, r * 1.45),
+          new THREE.Vector3(r * 0.45, 0.9, r * 1.1),
+          new THREE.Vector3(r * 0.6, 2.2, r * 0.85),
+          new THREE.Vector3(0, 4.2, r * 0.65),
+          new THREE.Vector3(-r * 0.4, 4.8, 0.1)
+        );
+      } else if (presetName === 'figure8') {
+        state.closedLoop = true;
+        const steps = 12;
+        for (let i = 0; i < steps; i++) {
+          const t = (i / steps) * Math.PI * 2;
+          const x = Math.sin(t) * r * 1.35;
+          const z = Math.sin(t * 2) * r * 0.85;
+          const y = yBase + Math.cos(t) * 0.8;
+          pts.push(new THREE.Vector3(x, y, z));
+        }
+      }
+
+      document.getElementById('chkClosedLoop').checked = state.closedLoop;
+      state.rawControlPoints = pts;
+      rebuildCameraPathSpline();
+
+      if (!silent) {
+        showToast(`Applied "${presetName.toUpperCase()}" camera track preset.`);
+      }
+    }
+
+    /***************************************************************************
+     * 6. 3D PEN TOOL & VIEWPORT POINTER INTERACTION
+     ***************************************************************************/
+    function setupViewportInteractions() {
+      const canvas = document.getElementById('mainCanvas');
+
+      function updateRaycaster(clientX, clientY) {
+        const rect = canvas.getBoundingClientRect();
+        mouseNDC.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+        mouseNDC.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+        const activeCam = state.mainViewIsPathCam ? pathCamera : editorCamera;
+        raycaster.setFromCamera(mouseNDC, activeCam);
+      }
+
+      function getPointOnDrawingPlane() {
+        mathPlane.constant = -state.planeHeight;
+        const target = new THREE.Vector3();
+        const hit = raycaster.ray.intersectPlane(mathPlane, target);
+        if (hit && target.length() < 60) {
+          return target;
+        }
+        return null;
+      }
+
+      canvas.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return; // Only left click for pen/edit
+        updateRaycaster(e.clientX, e.clientY);
+
+        if (state.interactionMode === 'pen') {
+          const hitPt = getPointOnDrawingPlane();
+          if (!hitPt) return;
+
+          const strokeMode = document.getElementById('penStrokeMode').value;
+          if (strokeMode === 'freehand') {
+            state.isDrawingStroke = true;
+            // Start a fresh stroke if holding Shift or if fewer than 2 points exist
+            if (state.rawControlPoints.length === 0) {
+              state.closedLoop = false;
+              document.getElementById('chkClosedLoop').checked = false;
+            }
+          }
+
+          // Un-scale point before pushing to rawControlPoints
+          const rawPt = new THREE.Vector3(
+            hitPt.x / state.pathScale,
+            hitPt.y,
+            hitPt.z / state.pathScale
+          );
+          state.rawControlPoints.push(rawPt);
+          rebuildCameraPathSpline();
+        } else if (state.interactionMode === 'edit') {
+          const intersects = raycaster.intersectObjects(pathControlSpheres, false);
+          if (intersects.length > 0) {
+            state.selectedNodeIndex = intersects[0].object.userData.nodeIndex;
+            state.isDraggingNode = true;
+            orbitControls.enabled = false;
+            const nodePt = state.pathControlPoints[state.selectedNodeIndex];
+            state.planeHeight = nodePt.y;
+            document.getElementById('sliderPlaneHeight').value = nodePt.y;
+            document.getElementById('valPlaneHeight').textContent = `${nodePt.y.toFixed(1)}m`;
+          }
+        }
+      });
+
+      canvas.addEventListener('pointermove', (e) => {
+        updateRaycaster(e.clientX, e.clientY);
+
+        if (state.interactionMode === 'pen') {
+          const hitPt = getPointOnDrawingPlane();
+          if (hitPt) {
+            drawingCursorMesh.visible = true;
+            drawingCursorMesh.position.copy(hitPt);
+
+            if (state.isDrawingStroke) {
+              const lastPt = state.rawControlPoints[state.rawControlPoints.length - 1];
+              const worldLast = lastPt
+                ? new THREE.Vector3(lastPt.x * state.pathScale, lastPt.y, lastPt.z * state.pathScale)
+                : null;
+              // Add new point along freehand stroke every 0.45m for smooth Catmull-Rom curves
+              if (!worldLast || worldLast.distanceTo(hitPt) > 0.45) {
+                state.rawControlPoints.push(
+                  new THREE.Vector3(hitPt.x / state.pathScale, hitPt.y, hitPt.z / state.pathScale)
+                );
+                rebuildCameraPathSpline();
+              }
+            }
+          } else {
+            drawingCursorMesh.visible = false;
+          }
+        } else if (state.interactionMode === 'edit') {
+          if (state.isDraggingNode && state.selectedNodeIndex >= 0) {
+            const hitPt = getPointOnDrawingPlane();
+            if (hitPt) {
+              state.rawControlPoints[state.selectedNodeIndex].set(
+                hitPt.x / state.pathScale,
+                state.planeHeight,
+                hitPt.z / state.pathScale
+              );
+              rebuildCameraPathSpline();
+            }
+          } else {
+            const intersects = raycaster.intersectObjects(pathControlSpheres, false);
+            canvas.style.cursor = intersects.length > 0 ? 'move' : 'default';
+          }
+        }
+      });
+
+      window.addEventListener('pointerup', () => {
+        if (state.isDrawingStroke) {
+          state.isDrawingStroke = false;
+          showToast(`Path updated (${state.rawControlPoints.length} control nodes).`);
+        }
+        if (state.isDraggingNode) {
+          state.isDraggingNode = false;
+          state.selectedNodeIndex = -1;
+          if (state.interactionMode === 'edit') {
+            orbitControls.enabled = true;
+          }
+        }
+      });
+
+      // Keyboard Shortcuts
+      window.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+        if (e.code === 'Space') {
+          e.preventDefault();
+          togglePlayPath();
+        } else if (e.key === 'f' || e.key === 'F') {
+          fitCameraToModel();
+        } else if (e.key === 'Escape') {
+          setInteractionMode('orbit');
+        } else if (e.key === 'p' || e.key === 'P') {
+          setInteractionMode('pen');
+        }
+      });
+    }
+
+    function setInteractionMode(mode) {
+      state.interactionMode = mode;
+      const canvas = document.getElementById('mainCanvas');
+      const banner = document.getElementById('penModeBanner');
+
+      // Update Header Mode Buttons
+      const buttons = {
+        orbit: document.getElementById('modeOrbitBtn'),
+        pen: document.getElementById('modePenBtn'),
+        edit: document.getElementById('modeEditNodesBtn')
+      };
+      Object.keys(buttons).forEach(k => {
+        if (!buttons[k]) return;
+        if (k === mode) {
+          buttons[k].className = 'mode-btn flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium bg-blue-600 text-white shadow transition';
+        } else {
+          buttons[k].className = 'mode-btn flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-studio-800 transition';
+        }
+      });
+
+      if (mode === 'pen') {
+        orbitControls.enabled = false;
+        drawingPlaneMesh.visible = true;
+        drawingCursorMesh.visible = true;
+        banner.classList.remove('hidden');
+        canvas.classList.add('cursor-pen');
+        showToast('3D Pen Tool Active: Click or drag in 3D space to draw a camera path!');
+      } else if (mode === 'edit') {
+        orbitControls.enabled = true;
+        drawingPlaneMesh.visible = true;
+        drawingCursorMesh.visible = false;
+        banner.classList.add('hidden');
+        canvas.classList.remove('cursor-pen');
+        showToast('Edit Mode: Drag any cyan/green sphere node to reshape the 3D camera path.');
+      } else {
+        orbitControls.enabled = true;
+        drawingPlaneMesh.visible = false;
+        drawingCursorMesh.visible = false;
+        banner.classList.add('hidden');
+        canvas.classList.remove('cursor-pen');
+        canvas.style.cursor = 'default';
+      }
+    }
+
+    function clearPathForNewDrawing() {
+      state.rawControlPoints = [];
+      state.closedLoop = false;
+      document.getElementById('chkClosedLoop').checked = false;
+      rebuildCameraPathSpline();
+      setInteractionMode('pen');
+      showToast('Cleared camera path. Click & drag in the viewport to sketch a new path!');
+    }
+
+    function reverseCameraPath() {
+      if (state.rawControlPoints.length < 2) return;
+      state.rawControlPoints.reverse();
+      rebuildCameraPathSpline();
+      showToast('Reversed camera path direction.');
+    }
+
+    function undoLastPathNode() {
+      if (state.rawControlPoints.length > 0) {
+        state.rawControlPoints.pop();
+        rebuildCameraPathSpline();
+      }
+    }
+
+    /***************************************************************************
+     * 7. BUILT-IN PROCEDURAL 3D SHOWCASE MODELS
+     ***************************************************************************/
+    function clearCurrentModel() {
+      while (modelRootGroup.children.length > 0) {
+        const obj = modelRootGroup.children[0];
+        modelRootGroup.remove(obj);
+      }
+      while (wireframeOverlayGroup.children.length > 0) {
+        const obj = wireframeOverlayGroup.children[0];
+        wireframeOverlayGroup.remove(obj);
+      }
+    }
+
+    function loadProceduralModel(type) {
+      clearCurrentModel();
+      const group = new THREE.Group();
+
+      const metalMat = new THREE.MeshStandardMaterial({
+        color: 0x38bdf8,
+        metalness: 0.75,
+        roughness: 0.22
+      });
+      const darkArmorMat = new THREE.MeshStandardMaterial({
+        color: 0x1e293b,
+        metalness: 0.6,
+        roughness: 0.35
+      });
+      const glowMat = new THREE.MeshStandardMaterial({
+        color: 0x22d3ee,
+        emissive: 0x06b6d4,
+        emissiveIntensity: 0.9,
+        roughness: 0.1
+      });
+      const goldMat = new THREE.MeshStandardMaterial({
+        color: 0xf59e0b,
+        metalness: 0.85,
+        roughness: 0.2
+      });
+
+      if (type === 'mech') {
+        state.currentFileName = 'Cybernetic_Mech_Core.glb';
+        // Pedestal Base
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.85, 0.25, 32), darkArmorMat);
+        base.position.y = 0.125;
+        base.receiveShadow = true;
+        group.add(base);
+
+        // Glowing Core Icosahedron
+        const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.58, 2), glowMat);
+        core.position.y = 1.45;
+        core.castShadow = true;
+        group.add(core);
+
+        // Outer Gyro Rings
+        const ring1 = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.06, 16, 64), metalMat);
+        ring1.position.y = 1.45;
+        ring1.rotation.x = Math.PI / 4;
+        ring1.castShadow = true;
+        group.add(ring1);
+
+        const ring2 = new THREE.Mesh(new THREE.TorusGeometry(1.22, 0.05, 16, 64), goldMat);
+        ring2.position.y = 1.45;
+        ring2.rotation.y = Math.PI / 3;
+        ring2.rotation.x = -Math.PI / 6;
+        ring2.castShadow = true;
+        group.add(ring2);
+
+        // 4 Structural Armor Pillars
+        for (let i = 0; i < 4; i++) {
+          const angle = (i / 4) * Math.PI * 2 + Math.PI / 4;
+          const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.28, 2.1, 0.38), darkArmorMat);
+          pillar.position.set(Math.cos(angle) * 1.25, 1.15, Math.sin(angle) * 1.25);
+          pillar.lookAt(0, 1.15, 0);
+          pillar.castShadow = true;
+          group.add(pillar);
+        }
+      } else if (type === 'sculpture') {
+        state.currentFileName = 'Parametric_Torus_Sculpture.obj';
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.5, 0.3, 48), darkArmorMat);
+        base.position.y = 0.15;
+        group.add(base);
+
+        const knotGeo = new THREE.TorusKnotGeometry(0.92, 0.26, 180, 32, 2, 3);
+        const knot = new THREE.Mesh(knotGeo, metalMat);
+        knot.position.y = 1.65;
+        knot.castShadow = true;
+        group.add(knot);
+      } else if (type === 'pavilion') {
+        state.currentFileName = 'Architectural_Glass_Pavilion.gltf';
+        // Stepped Plaza Floor
+        const floor1 = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.2, 3.2), darkArmorMat);
+        floor1.position.y = 0.1;
+        group.add(floor1);
+
+        // Cantilevered Roof
+        const roof = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.18, 3.4), metalMat);
+        roof.position.set(0, 2.2, 0);
+        roof.castShadow = true;
+        group.add(roof);
+
+        // Columns
+        const colPositions = [
+          [-1.7, -1.2], [1.7, -1.2], [-1.7, 1.2], [1.7, 1.2], [0, -1.2], [0, 1.2]
+        ];
+        colPositions.forEach(([x, z]) => {
+          const col = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 2.0, 16), goldMat);
+          col.position.set(x, 1.1, z);
+          col.castShadow = true;
+          group.add(col);
+        });
+
+        // Center Atrium Sculpture
+        const centerpiece = new THREE.Mesh(new THREE.OctahedronGeometry(0.55, 0), glowMat);
+        centerpiece.position.set(0, 1.1, 0);
+        group.add(centerpiece);
+      } else if (type === 'rover') {
+        state.currentFileName = 'SciFi_Planetary_Rover.fbx';
+        // Chassis
+        const chassis = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.55, 2.4), metalMat);
+        chassis.position.y = 0.85;
+        chassis.castShadow = true;
+        group.add(chassis);
+
+        // 6 Wheels
+        const wheelGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.28, 24);
+        wheelGeo.rotateZ(Math.PI / 2);
+        const wheelZ = [-0.95, 0, 0.95];
+        [-1.05, 1.05].forEach(x => {
+          wheelZ.forEach(z => {
+            const w = new THREE.Mesh(wheelGeo, darkArmorMat);
+            w.position.set(x, 0.38, z);
+            w.castShadow = true;
+            group.add(w);
+          });
+        });
+
+        // Camera Mast & Head
+        const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 1.1, 16), goldMat);
+        mast.position.set(0, 1.6, 0.75);
+        group.add(mast);
+
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.26, 0.32), glowMat);
+        head.position.set(0, 2.15, 0.75);
+        group.add(head);
+      }
+
+      state.currentFileFormat = 'PROCEDURAL';
+      finalizeLoadedModel(group, state.currentFileName, 'PROCEDURAL');
+    }
+
+    /***************************************************************************
+     * 8. MULTI-FORMAT 3D FILE LOADER (.GLB, .GLTF, .OBJ, .STL, .PLY, .FBX, .DAE)
+     ***************************************************************************/
+    function handle3DFileLoad(file) {
+      if (!file) return;
+      const fileName = file.name;
+      const ext = fileName.split('.').pop().toLowerCase();
+      const validExts = ['glb', 'gltf', 'obj', 'stl', 'ply', 'fbx', 'dae'];
+
+      if (!validExts.includes(ext)) {
+        showToast(`Unsupported extension ".${ext}". Use GLB, GLTF, OBJ, STL, PLY, FBX, or DAE.`, true);
+        return;
+      }
+
+      showToast(`Loading "${fileName}"...`);
+      const objectUrl = URL.createObjectURL(file);
+
+      const defaultMat = new THREE.MeshStandardMaterial({
+        color: 0x60a5fa,
+        metalness: 0.35,
+        roughness: 0.35,
+        side: THREE.DoubleSide
+      });
+
+      try {
+        if (ext === 'glb' || ext === 'gltf') {
+          const loader = new THREE.GLTFLoader();
+          loader.load(
+            objectUrl,
+            (gltf) => {
+              URL.revokeObjectURL(objectUrl);
+              finalizeLoadedModel(gltf.scene, fileName, ext.toUpperCase());
+            },
+            undefined,
+            (err) => handleLoadError(err, objectUrl)
+          );
+        } else if (ext === 'obj') {
+          const loader = new THREE.OBJLoader();
+          loader.load(
+            objectUrl,
+            (obj) => {
+              URL.revokeObjectURL(objectUrl);
+              obj.traverse(child => {
+                if (child.isMesh && !child.material) child.material = defaultMat;
+              });
+              finalizeLoadedModel(obj, fileName, 'OBJ');
+            },
+            undefined,
+            (err) => handleLoadError(err, objectUrl)
+          );
+        } else if (ext === 'stl') {
+          const loader = new THREE.STLLoader();
+          loader.load(
+            objectUrl,
+            (geometry) => {
+              URL.revokeObjectURL(objectUrl);
+              geometry.computeVertexNormals();
+              const mesh = new THREE.Mesh(geometry, defaultMat);
+              const group = new THREE.Group();
+              group.add(mesh);
+              finalizeLoadedModel(group, fileName, 'STL');
+            },
+            undefined,
+            (err) => handleLoadError(err, objectUrl)
+          );
+        } else if (ext === 'ply') {
+          const loader = new THREE.PLYLoader();
+          loader.load(
+            objectUrl,
+            (geometry) => {
+              URL.revokeObjectURL(objectUrl);
+              geometry.computeVertexNormals();
+              const mat = geometry.attributes.color
+                ? new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.2 })
+                : defaultMat;
+              const mesh = new THREE.Mesh(geometry, mat);
+              const group = new THREE.Group();
+              group.add(mesh);
+              finalizeLoadedModel(group, fileName, 'PLY');
+            },
+            undefined,
+            (err) => handleLoadError(err, objectUrl)
+          );
+        } else if (ext === 'fbx') {
+          const loader = new THREE.FBXLoader();
+          loader.load(
+            objectUrl,
+            (fbx) => {
+              URL.revokeObjectURL(objectUrl);
+              finalizeLoadedModel(fbx, fileName, 'FBX');
+            },
+            undefined,
+            (err) => handleLoadError(err, objectUrl)
+          );
+        } else if (ext === 'dae') {
+          const loader = new THREE.ColladaLoader();
+          loader.load(
+            objectUrl,
+            (collada) => {
+              URL.revokeObjectURL(objectUrl);
+              finalizeLoadedModel(collada.scene, fileName, 'DAE');
+            },
+            undefined,
+            (err) => handleLoadError(err, objectUrl)
+          );
+        }
+      } catch (err) {
+        handleLoadError(err, objectUrl);
+      }
+    }
+
+    function handleLoadError(err, objectUrl) {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      console.error('3D File Load Error:', err);
+      showToast('Failed to parse 3D file. Please verify the file is valid.', true);
+    }
+
+    function finalizeLoadedModel(rootObject, fileName, formatLabel) {
+      clearCurrentModel();
+
+      // Compute raw bounding box to normalize scale & center on studio floor
+      const box = new THREE.Box3().setFromObject(rootObject);
+      const size = new THREE.Vector3();
+      const center = new THREE.Vector3();
+      box.getSize(size);
+      box.getCenter(center);
+
+      const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+      const targetScale = 3.2 / maxDim;
+
+      rootObject.scale.multiplyScalar(targetScale);
+
+      // Recompute after scaling so bottom rests on Y = 0 and centered on XZ
+      const scaledBox = new THREE.Box3().setFromObject(rootObject);
+      const scaledCenter = new THREE.Vector3();
+      const scaledSize = new THREE.Vector3();
+      scaledBox.getCenter(scaledCenter);
+      scaledBox.getSize(scaledSize);
+
+      rootObject.position.x -= scaledCenter.x;
+      rootObject.position.z -= scaledCenter.z;
+      rootObject.position.y -= scaledBox.min.y;
+
+      // Count vertices, triangles, meshes & store original materials for shading switcher
+      let vertexCount = 0;
+      let triangleCount = 0;
+      let meshCount = 0;
+
+      rootObject.traverse((child) => {
+        if (child.isMesh && child.geometry) {
+          meshCount++;
+          child.castShadow = true;
+          child.receiveShadow = true;
+          child.userData.originalMaterial = child.material.clone ? child.material.clone() : child.material;
+
+          const posAttr = child.geometry.attributes.position;
+          if (posAttr) {
+            vertexCount += posAttr.count;
+            if (child.geometry.index) {
+              triangleCount += Math.round(child.geometry.index.count / 3);
+            } else {
+              triangleCount += Math.round(posAttr.count / 3);
+            }
+          }
+        }
+      });
+
+      modelRootGroup.add(rootObject);
+
+      state.currentFileName = fileName;
+      state.currentFileFormat = formatLabel;
+      state.modelCenter.set(0, scaledSize.y * 0.5, 0);
+      state.modelRadius = Math.max(scaledSize.x, scaledSize.y, scaledSize.z) * 0.65;
+      state.targetY = Number((scaledSize.y * 0.5).toFixed(1));
+
+      // Update Inspector UI
+      document.getElementById('statFileName').textContent = fileName;
+      document.getElementById('statFileName').title = fileName;
+      document.getElementById('fileFormatBadge').textContent = formatLabel;
+      document.getElementById('statVertices').textContent = vertexCount.toLocaleString();
+      document.getElementById('statTriangles').textContent = triangleCount.toLocaleString();
+      document.getElementById('statMeshes').textContent = meshCount.toLocaleString();
+      document.getElementById('statBounds').textContent = `${size.x.toFixed(1)}×${size.y.toFixed(1)}×${size.z.toFixed(1)}`;
+
+      document.getElementById('sliderTargetY').value = state.targetY;
+      document.getElementById('valTargetY').textContent = `${state.targetY}m`;
+
+      // Re-apply current shading mode
+      setShadingMode(state.shadingMode);
+
+      // Update camera target
+      orbitControls.target.copy(state.modelCenter);
+      orbitControls.update();
+
+      showToast(`Loaded "${fileName}" (${triangleCount.toLocaleString()} tris)`);
+    }
+
+    /***************************************************************************
+     * 9. PWA LAUNCHQUEUE CONSUMER FOR OS "OPEN WITH" CONTEXT MENU
+     ***************************************************************************/
+    function initLaunchQueueHandler() {
+      if ('launchQueue' in window) {
+        window.launchQueue.setConsumer(async (launchParams) => {
+          if (!launchParams.files || launchParams.files.length === 0) return;
+          try {
+            const fileHandle = launchParams.files[0];
+            const file = await fileHandle.getFile();
+            handle3DFileLoad(file);
+          } catch (err) {
+            console.error('LaunchQueue file error:', err);
+          }
+        });
+      }
+    }
+
+    /***************************************************************************
+     * 10. SHADING MODES, CAMERA VIEWS & SCENE DISPLAY SETTINGS
+     ***************************************************************************/
+    function setShadingMode(mode) {
+      state.shadingMode = mode;
+
+      // Highlight active button
+      document.querySelectorAll('.shade-btn').forEach(btn => {
+        btn.className = 'shade-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-studio-800 hover:bg-studio-700 text-slate-300 border border-slate-700/70 text-left flex items-center gap-1.5 transition';
+      });
+      const activeBtn = document.getElementById(`shade-${mode}`);
+      if (activeBtn) {
+        activeBtn.className = 'shade-btn px-2.5 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white border border-blue-500 text-left flex items-center gap-1.5 transition';
+      }
+
+      // Clear wireframe overlay
+      while (wireframeOverlayGroup.children.length > 0) {
+        wireframeOverlayGroup.remove(wireframeOverlayGroup.children[0]);
+      }
+
+      const clayMat = new THREE.MeshStandardMaterial({
+        color: 0xd97757,
+        roughness: 0.42,
+        metalness: 0.08
+      });
+      const wireMat = new THREE.MeshBasicMaterial({
+        color: 0x38bdf8,
+        wireframe: true
+      });
+      const normalMat = new THREE.MeshNormalMaterial();
+      const xrayMat = new THREE.MeshPhongMaterial({
+        color: 0x06b6d4,
+        emissive: 0x0891b2,
+        emissiveIntensity: 0.4,
+        transparent: true,
+        opacity: 0.42,
+        depthWrite: false,
+        side: THREE.DoubleSide
+      });
+
+      modelRootGroup.traverse(child => {
+        if (!child.isMesh) return;
+        if (mode === 'pbr' || mode === 'wireoverlay') {
+          if (child.userData.originalMaterial) {
+            child.material = child.userData.originalMaterial;
+          }
+          if (mode === 'wireoverlay') {
+            const wfGeo = new THREE.WireframeGeometry(child.geometry);
+            const wfLine = new THREE.LineSegments(
+              wfGeo,
+              new THREE.LineBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.35 })
+            );
+            wfLine.matrixAutoUpdate = false;
+            child.updateMatrixWorld();
+            wfLine.matrix.copy(child.matrixWorld);
+            wireframeOverlayGroup.add(wfLine);
+          }
+        } else if (mode === 'clay') {
+          child.material = clayMat;
+        } else if (mode === 'wireframe') {
+          child.material = wireMat;
+        } else if (mode === 'normals') {
+          child.material = normalMat;
+        } else if (mode === 'xray') {
+          child.material = xrayMat;
+        }
+      });
+    }
+
+    function setCameraView(preset) {
+      const dist = Math.max(4.8, state.modelRadius * 2.5);
+      const c = state.modelCenter;
+      if (preset === 'front') editorCamera.position.set(c.x, c.y + 0.4, c.z + dist);
+      else if (preset === 'back') editorCamera.position.set(c.x, c.y + 0.4, c.z - dist);
+      else if (preset === 'right') editorCamera.position.set(c.x + dist, c.y + 0.4, c.z);
+      else if (preset === 'top') editorCamera.position.set(c.x, c.y + dist * 1.2, c.z + 0.01);
+      else if (preset === 'iso') editorCamera.position.set(c.x + dist * 0.8, c.y + dist * 0.7, c.z + dist * 0.8);
+
+      orbitControls.target.copy(c);
+      orbitControls.update();
+    }
+
+    function fitCameraToModel() {
+      setCameraView('iso');
+      showToast('Camera framed to model.');
+    }
+
+    function setBackdrop(theme) {
+      const vp = document.getElementById('viewportContainer');
+      const map = {
+        obsidian: 'flex-1 relative overflow-hidden bg-gradient-to-b from-[#131824] to-[#090b10]',
+        midnight: 'flex-1 relative overflow-hidden bg-gradient-to-b from-[#0f172a] to-[#1e1b4b]',
+        slate: 'flex-1 relative overflow-hidden bg-gradient-to-b from-[#334155] to-[#0f172a]',
+        emerald: 'flex-1 relative overflow-hidden bg-gradient-to-b from-[#064e3b] to-[#022c22]',
+        pureblack: 'flex-1 relative overflow-hidden bg-black'
+      };
+      vp.className = map[theme] || map.obsidian;
+    }
+
+    function toggleMainViewportCamera() {
+      state.mainViewIsPathCam = !state.mainViewIsPathCam;
+      const footerTxt = document.getElementById('footerCamToggleText');
+      const swapBtn = document.getElementById('btnSwapMainCamera');
+
+      if (state.mainViewIsPathCam) {
+        footerTxt.textContent = 'View: Path Camera (Live)';
+        swapBtn.innerHTML = '<i class="fa-solid fa-Lock-open mr-1"></i>Editor Cam';
+        showToast('Main Viewport switched to Path Camera View.');
+      } else {
+        footerTxt.textContent = 'View: Free Editor Cam';
+        swapBtn.innerHTML = '<i class="fa-solid fa-video mr-1"></i>Main View';
+        showToast('Main Viewport switched to Free Editor Camera.');
+      }
+    }
+
+    /***************************************************************************
+     * 11. TIMELINE PLAYBACK & 60 FPS WEBM PATH VIDEO RECORDER
+     ***************************************************************************/
+    function togglePlayPath() {
+      state.isPlayingPath = !state.isPlayingPath;
+      const icon = document.getElementById('iconPlayPause');
+      icon.className = state.isPlayingPath ? 'fa-solid fa-pause text-xs' : 'fa-solid fa-play text-xs ml-0.5';
+    }
+
+    function scrubToProgress(p) {
+      state.pathProgress = Math.max(0, Math.min(1, p));
+      updatePathCameraTransform(state.pathProgress);
+      syncTimelineUI();
+    }
+
+    function syncTimelineUI() {
+      const pct = Math.round(state.pathProgress * 100);
+      const curSec = (state.pathProgress * state.pathDuration).toFixed(1);
+      document.getElementById('timelineScrubber').value = Math.round(state.pathProgress * 1000);
+      document.getElementById('timelinePercentBadge').textContent = `${pct}%`;
+      document.getElementById('timelineTimeText').textContent = `${curSec}s`;
+      document.getElementById('timelineDurationText').textContent = `${state.pathDuration.toFixed(1)}s`;
+      document.getElementById('pipTimecode').textContent = `00:0${curSec}`;
+    }
+
+    function startPathVideoRecording() {
+      if (state.isRecording) {
+        stopPathVideoRecording();
+        return;
+      }
+      if (!state.curve || state.pathControlPoints.length < 2) {
+        showToast('Please draw or select a camera path with at least 2 points first!', true);
+        return;
+      }
+
+      const mainCanvas = document.getElementById('mainCanvas');
+      const resChoice = document.getElementById('selectResolution').value;
+
+      // Resize canvas to target capture resolution
+      if (resChoice === '1080p') mainRenderer.setSize(1920, 1080, false);
+      else if (resChoice === '720p') mainRenderer.setSize(1280, 720, false);
+      else if (resChoice === 'square') mainRenderer.setSize(1080, 1080, false);
+
+      const width = mainCanvas.width;
+      const height = mainCanvas.height;
+      pathCamera.aspect = width / height;
+      pathCamera.updateProjectionMatrix();
+
+      // Prepare scene for clean cinematic capture (hide gizmos, look through Path Camera)
+      state.isRecording = true;
+      state.pathProgress = 0;
+      state.isPlayingPath = true;
+
+      document.getElementById('recordingBanner').classList.remove('hidden');
+
+      const stream = mainCanvas.captureStream(60);
+      const mimeTypes = [
+        'video/webm;codecs=vp9',
+        'video/webm;codecs=vp8',
+        'video/webm'
+      ];
+      const selectedMime = mimeTypes.find(m => MediaRecorder.isTypeSupported(m)) || '';
+
+      state.recordedChunks = [];
+      state.mediaRecorder = new MediaRecorder(stream, selectedMime ? { mimeType: selectedMime, videoBitsPerSecond: 12000000 } : undefined);
+
+      state.mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          state.recordedChunks.push(e.data);
+        }
+      };
+
+      state.mediaRecorder.onstop = () => {
+        const blob = new Blob(state.recordedChunks, { type: 'video/webm' });
+        const videoUrl = URL.createObjectURL(blob);
+
+        // Restore viewport dimensions
+        onWindowResize();
+
+        // Populate Video Preview Modal & auto-download
+        const vidEl = document.getElementById('recordedVideoElement');
+        const dlLink = document.getElementById('btnDownloadVideoLink');
+        const cleanName = state.currentFileName.replace(/\.[^/.]+$/, '');
+        const outFilename = `${cleanName}-camera-path.webm`;
+
+        vidEl.src = videoUrl;
+        dlLink.href = videoUrl;
+        dlLink.download = outFilename;
+        document.getElementById('recordedVideoMeta').textContent = `${width}×${height} @ 60 FPS (${state.pathDuration}s WebM)`;
+
+        toggleModal('videoPreviewModal', true);
+        dlLink.click();
+      };
+
+      state.mediaRecorder.start();
+    }
+
+    function stopPathVideoRecording() {
+      if (!state.isRecording) return;
+      state.isRecording = false;
+      document.getElementById('recordingBanner').classList.add('hidden');
+      if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
+        state.mediaRecorder.stop();
+      }
+    }
+
+    /***************************************************************************
+     * 12. MAIN RENDER LOOP
+     ***************************************************************************/
+    function animateStudio() {
+      requestAnimationFrame(animateStudio);
+
+      const dt = Math.min(clock.getDelta(), 0.1);
+
+      // Update OrbitControls
+      if (orbitControls.enabled) {
+        orbitControls.update();
+      }
+
+      // Optional Model Turntable Spin
+      if (state.turntableEnabled && !state.isRecording) {
+        modelRootGroup.rotation.y += dt * 0.55;
+        wireframeOverlayGroup.rotation.y = modelRootGroup.rotation.y;
+      }
+
+      // Advance Camera Path Timeline
+      if (state.isPlayingPath && state.curve) {
+        state.pathProgress += dt / state.pathDuration;
+
+        if (state.isRecording) {
+          const pct = Math.min(100, Math.round(state.pathProgress * 100));
+          document.getElementById('recProgressText').textContent = `${pct}%`;
+          if (state.pathProgress >= 1.0) {
+            state.pathProgress = 1.0;
+            updatePathCameraTransform(1.0);
+            stopPathVideoRecording();
+          }
+        } else if (state.pathProgress >= 1.0) {
+          state.pathProgress = 0.0;
+        }
+
+        updatePathCameraTransform(state.pathProgress);
+        syncTimelineUI();
+      }
+
+      // Determine visibility of 3D gizmos
+      const showGizmos = !state.isRecording && !state.hideGizmos && !state.mainViewIsPathCam;
+      pathVisualGroup.visible = showGizmos;
+      cameraGizmoGroup.visible = showGizmos;
+      lookTargetGizmo.visible = showGizmos;
+
+      // 1. Render Main Viewport
+      const activeMainCam = (state.isRecording || state.mainViewIsPathCam) ? pathCamera : editorCamera;
+      mainRenderer.render(scene, activeMainCam);
+
+      // 2. Render Picture-in-Picture (PiP) Path Camera Monitor (always clean without path gizmos)
+      if (!state.isRecording) {
+        const prevPathVis = pathVisualGroup.visible;
+        const prevCamVis = cameraGizmoGroup.visible;
+        const prevTargVis = lookTargetGizmo.visible;
+        const prevPlaneVis = drawingPlaneMesh.visible;
+        const prevCursorVis = drawingCursorMesh.visible;
+
+        pathVisualGroup.visible = false;
+        cameraGizmoGroup.visible = false;
+        lookTargetGizmo.visible = false;
+        drawingPlaneMesh.visible = false;
+        drawingCursorMesh.visible = false;
+
+        const origAspect = pathCamera.aspect;
+        pathCamera.aspect = 16 / 9;
+        pathCamera.updateProjectionMatrix();
+
+        pipRenderer.render(scene, pathCamera);
+
+        pathCamera.aspect = origAspect;
+        pathCamera.updateProjectionMatrix();
+
+        pathVisualGroup.visible = prevPathVis;
+        cameraGizmoGroup.visible = prevCamVis;
+        lookTargetGizmo.visible = prevTargVis;
+        drawingPlaneMesh.visible = prevPlaneVis;
+        drawingCursorMesh.visible = prevCursorVis;
+      }
+    }
+
+    function onWindowResize() {
+      if (state.isRecording) return;
+      const container = document.getElementById('viewportContainer');
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      editorCamera.aspect = w / h;
+      editorCamera.updateProjectionMatrix();
+      pathCamera.aspect = w / h;
+      pathCamera.updateProjectionMatrix();
+      mainRenderer.setSize(w, h);
+    }
+
+    /***************************************************************************
+     * 13. UI EVENT BINDINGS & HELPER UTILITIES
+     ***************************************************************************/
+    function bindUIControls() {
+      // File Open Button & Drag-and-Drop
+      const fileInput = document.getElementById('fileInput');
+      document.getElementById('btnOpenFile').addEventListener('click', () => fileInput.click());
+      fileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+          handle3DFileLoad(e.target.files[0]);
+          fileInput.value = '';
+        }
+      });
+
+      // Global Drag & Drop
+      const dropOverlay = document.getElementById('dropZoneOverlay');
+      window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropOverlay.classList.remove('opacity-0');
+      });
+      window.addEventListener('dragleave', (e) => {
+        if (e.relatedTarget === null) {
+          dropOverlay.classList.add('opacity-0');
+        }
+      });
+      window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropOverlay.classList.add('opacity-0');
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          handle3DFileLoad(e.dataTransfer.files[0]);
+        }
+      });
+
+      // Preset Model Selector
+      document.getElementById('presetModelSelect').addEventListener('change', (e) => {
+        loadProceduralModel(e.target.value);
+      });
+
+      // Lighting Sliders
+      document.getElementById('sliderLightIntensity').addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        keyLight.intensity = val;
+        document.getElementById('valLightIntensity').textContent = `${val.toFixed(1)}x`;
+      });
+
+      document.getElementById('sliderLightAngle').addEventListener('input', (e) => {
+        const deg = parseFloat(e.target.value);
+        const rad = THREE.MathUtils.degToRad(deg);
+        keyLight.position.set(Math.cos(rad) * 8.5, 10, Math.sin(rad) * 8.5);
+        document.getElementById('valLightAngle').textContent = `${deg}°`;
+      });
+
+      // Checkboxes
+      document.getElementById('chkShowGrid').addEventListener('change', (e) => {
+        gridHelper.visible = e.target.checked;
+      });
+      document.getElementById('chkShowAxes').addEventListener('change', (e) => {
+        axesHelper.visible = e.target.checked;
+      });
+      document.getElementById('chkTurntable').addEventListener('change', (e) => {
+        state.turntableEnabled = e.target.checked;
+      });
+      document.getElementById('chkHideGizmos').addEventListener('change', (e) => {
+        state.hideGizmos = e.target.checked;
+      });
+
+      // Pen Plane Height Slider
+      document.getElementById('sliderPlaneHeight').addEventListener('input', (e) => {
+        state.planeHeight = parseFloat(e.target.value);
+        drawingPlaneMesh.position.y = state.planeHeight;
+        document.getElementById('valPlaneHeight').textContent = `${state.planeHeight.toFixed(1)}m`;
+      });
+
+      // Closed Loop Checkbox
+      document.getElementById('chkClosedLoop').addEventListener('change', (e) => {
+        state.closedLoop = e.target.checked;
+        rebuildCameraPathSpline();
+      });
+
+      // Camera Look Mode
+      document.getElementById('selectLookMode').addEventListener('change', (e) => {
+        state.lookMode = e.target.value;
+        updatePathCameraTransform(state.pathProgress);
+      });
+
+      // Target Y Offset
+      document.getElementById('sliderTargetY').addEventListener('input', (e) => {
+        state.targetY = parseFloat(e.target.value);
+        document.getElementById('valTargetY').textContent = `${state.targetY.toFixed(1)}m`;
+        updatePathCameraTransform(state.pathProgress);
+      });
+
+      // Curve Tension
+      document.getElementById('sliderCurveTension').addEventListener('input', (e) => {
+        state.curveTension = parseFloat(e.target.value);
+        document.getElementById('valCurveTension').textContent = state.curveTension.toFixed(2);
+        rebuildCameraPathSpline();
+      });
+
+      // Path Scale
+      document.getElementById('sliderPathScale').addEventListener('input', (e) => {
+        const pct = parseFloat(e.target.value);
+        state.pathScale = pct / 100;
+        document.getElementById('valPathScale').textContent = `${pct}%`;
+        rebuildCameraPathSpline();
+      });
+
+      // Path Camera Lens FOV
+      document.getElementById('sliderPathFov').addEventListener('input', (e) => {
+        state.pathFov = parseFloat(e.target.value);
+        pathCamera.fov = state.pathFov;
+        pathCamera.updateProjectionMatrix();
+        document.getElementById('valPathFov').textContent = `${state.pathFov}°`;
+        document.getElementById('pipFovBadge').textContent = `FOV ${state.pathFov}°`;
+      });
+
+      // Duration & Easing
+      document.getElementById('inputDuration').addEventListener('change', (e) => {
+        state.pathDuration = Math.max(2, Math.min(60, parseFloat(e.target.value) || 8));
+        syncTimelineUI();
+      });
+      document.getElementById('selectEasing').addEventListener('change', (e) => {
+        state.easingMode = e.target.value;
+      });
+
+      // Timeline Scrubber
+      document.getElementById('timelineScrubber').addEventListener('input', (e) => {
+        state.isPlayingPath = false;
+        document.getElementById('iconPlayPause').className = 'fa-solid fa-play text-xs ml-0.5';
+        const val = parseFloat(e.target.value) / 1000;
+        scrubToProgress(val);
+      });
+    }
+
+    // Export current mesh as a standard Wavefront .OBJ file so users can test external file loading
+    function downloadTestSTLFile() {
+      let objContent = '# VoxelPath 3D Studio Sample Export\no SampleModel\n';
+      let vertexOffset = 1;
+
+      modelRootGroup.traverse((child) => {
+        if (child.isMesh && child.geometry) {
+          const geo = child.geometry.clone();
+          child.updateMatrixWorld();
+          geo.applyMatrix4(child.matrixWorld);
+
+          const pos = geo.attributes.position;
+          if (!pos) return;
+
+          for (let i = 0; i < pos.count; i++) {
+            objContent += `v ${pos.getX(i).toFixed(4)} ${pos.getY(i).toFixed(4)} ${pos.getZ(i).toFixed(4)}\n`;
+          }
+
+          if (geo.index) {
+            const idx = geo.index;
+            for (let i = 0; i < idx.count; i += 3) {
+              const a = idx.getX(i) + vertexOffset;
+              const b = idx.getX(i + 1) + vertexOffset;
+              const c = idx.getX(i + 2) + vertexOffset;
+              objContent += `f ${a} ${b} ${c}\n`;
+            }
+          } else {
+            for (let i = 0; i < pos.count; i += 3) {
+              const a = i + vertexOffset;
+              objContent += `f ${a} ${a + 1} ${a + 2}\n`;
+            }
+          }
+          vertexOffset += pos.count;
+        }
+      });
+
+      const blob = new Blob([objContent], { type: 'text/plain' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'voxelpath_sample_model.obj';
+      a.click();
+      showToast('Exported "voxelpath_sample_model.obj" — try dragging or opening it!');
+    }
+
+    function downloadManifestFile() {
+      const blob = new Blob([JSON.stringify(pwaManifest, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'manifest.json';
+      a.click();
+      showToast('Downloaded PWA manifest.json with 3D file_handlers.');
+    }
+
+    function toggleModal(modalId, show) {
+      const el = document.getElementById(modalId);
+      if (!el) return;
+      if (show) {
+        el.classList.remove('hidden');
+        el.classList.add('flex');
+      } else {
+        el.classList.add('hidden');
+        el.classList.remove('flex');
+      }
+    }
+
+    let toastTimeout = null;
+    function showToast(message, isError = false) {
+      const box = document.getElementById('toastBox');
+      const txt = document.getElementById('toastText');
+      const icon = document.getElementById('toastIcon');
+
+      txt.textContent = message;
+      icon.className = isError
+        ? 'fa-solid fa-triangle-exclamation text-rose-400'
+        : 'fa-solid fa-circle-check text-cyan-400';
+
+      box.classList.remove('opacity-0', 'translate-y-2');
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        box.classList.add('opacity-0', 'translate-y-2');
+      }, 3400);
+    }
+
+    window.onload = function () {
+      bindUIControls();
+      initThreeStudio();
+    };
+  </script>
+</body>
+</html>
